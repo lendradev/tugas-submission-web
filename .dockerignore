@@ -1,0 +1,24 @@
+# Artefak build
+bin/
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Environment & rahasia
+.env
+.env.*
+!.env.example
+
+# VCS & editor
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+
+# Test & cache
+.test-output/
+coverage.out
+*.test

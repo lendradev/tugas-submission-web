@@ -1,0 +1,155 @@
+{{define "admin.html"}}<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Tugas Submission</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body class="app-body" data-page="admin"
+      x-data="{ s: $app }"
+      x-init="s.init()"
+      data-user='{{ .User | jsonify }}'
+      data-csrf="{{ .CSRF }}">
+
+<header class="topbar">
+  <div class="topbar-left">
+    <a class="brand-text" href="/">← Kembali ke Tugas Saya</a>
+  </div>
+  <div class="topbar-right">
+    <span class="user-chip" x-text="s.user.display_name || s.user.username"></span>
+    <form method="post" action="/logout" class="inline-form">
+      <button class="btn ghost" type="submit">Keluar</button>
+    </form>
+  </div>
+</header>
+
+<main class="admin-wrap">
+  <h1>Dashboard Admin</h1>
+  <p class="muted">Kelola akun, batas penyimpanan, dan sinkronisasi.</p>
+
+  <p class="alert small" x-show="s.error" x-text="s.error" role="alert"></p>
+  <p class="notice small" x-show="s.notice" x-text="s.notice" role="status"></p>
+
+  <section class="panel">
+    <h2>Statistik</h2>
+    <div class="stat-grid">
+      <div class="stat"><span class="stat-num" x-text="s.stats.user_count"></span><span class="muted small">pengguna</span></div>
+      <div class="stat"><span class="stat-num" x-text="s.stats.file_count"></span><span class="muted small">berkas</span></div>
+      <div class="stat"><span class="stat-num" x-text="s.sizeLabel(s.stats.total_size)"></span><span class="muted small">dipakai</span></div>
+      <div class="stat"><span class="stat-num" x-text="s.stats.pending"></span><span class="muted small">menunggu push</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Tambah Pengguna</h2>
+    <form class="form-grid" @submit.prevent="s.createUser()">
+      <div>
+        <label class="field-label" for="nu-username">Username</label>
+        <input id="nu-username" type="text" x-model="s.form.username" autocomplete="off">
+        <p class="muted small">Huruf kecil, angka, titik, strip, garis bawah (3–32 karakter).</p>
+      </div>
+      <div>
+        <label class="field-label" for="nu-display">Nama Tampilan</label>
+        <input id="nu-display" type="text" x-model="s.form.display_name">
+      </div>
+      <div>
+        <label class="field-label" for="nu-password">Password</label>
+        <input id="nu-password" type="password" x-model="s.form.password" autocomplete="new-password">
+        <p class="muted small">Minimal 8 karakter.</p>
+      </div>
+      <div>
+        <label class="field-label" for="nu-role">Peran</label>
+        <select id="nu-role" x-model="s.form.role">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="submit">Buat Akun</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Pengguna</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Username</th><th>Nama</th><th>Peran</th><th>Status</th>
+          <th>Berkas</th><th>Push terakhir</th><th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="u in s.users" :key="u.id">
+          <tr>
+            <td class="mono" x-text="u.username"></td>
+            <td x-text="u.display_name"></td>
+            <td>
+              <select class="mini" x-model="u.role" @change="s.setRole(u)">
+                <option value="user">user</option>
+                <option value="admin">admin</option>
+              </select>
+            </td>
+            <td>
+              <span class="badge" :class="u.active ? 'ok' : 'off'" x-text="u.active ? 'Aktif' : 'Nonaktif'"></span>
+            </td>
+            <td x-text="u.file_count"></td>
+            <td class="muted small" x-text="u.last_push_at || '—'"></td>
+            <td class="row-actions">
+              <button class="btn mini" @click="s.toggleActive(u)" x-text="u.active ? 'Nonaktifkan' : 'Aktifkan'"></button>
+              <button class="btn mini" @click="s.resetPassword(u)">Reset password</button>
+              <button class="btn mini" @click="s.forcePush(u)">Push</button>
+              <button class="btn mini danger-btn" @click="s.removeUser(u)">Hapus</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Pengaturan</h2>
+    <form class="form-grid" @submit.prevent="s.saveSettings()">
+      <div>
+        <label class="field-label" for="s-upload">Batas ukuran berkas (MB)</label>
+        <input id="s-upload" type="number" min="1" max="100" x-model.number="s.settings.max_upload_size_mb">
+      </div>
+      <div>
+        <label class="field-label" for="s-quota">Kuota total (MB)</label>
+        <input id="s-quota" type="number" min="1" x-model.number="s.settings.total_quota_mb">
+      </div>
+      <div>
+        <label class="field-label" for="s-files">Maks berkas per permintaan</label>
+        <input id="s-files" type="number" min="1" max="100" x-model.number="s.settings.max_files_per_request">
+      </div>
+      <div>
+        <label class="field-label" for="s-base">Jeda push dasar (menit)</label>
+        <input id="s-base" type="number" min="1" x-model.number="s.settings.debounce_base_min">
+      </div>
+      <div>
+        <label class="field-label" for="s-min">Jeda minimum (menit)</label>
+        <input id="s-min" type="number" min="1" x-model.number="s.settings.debounce_min_min">
+      </div>
+      <div>
+        <label class="field-label" for="s-max">Jeda maksimum (menit)</label>
+        <input id="s-max" type="number" min="1" x-model.number="s.settings.debounce_max_min">
+      </div>
+      <div>
+        <label class="field-label" for="s-burst">Jendela deteksi perubahan (menit)</label>
+        <input id="s-burst" type="number" min="1" x-model.number="s.settings.burst_window_min">
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="submit">Simpan Pengaturan</button>
+      </div>
+    </form>
+  </section>
+</main>
+
+<!-- app.js dimuat lebih dulu: state didaftarkan sebagai magic $app
+     pada event "alpine:init", sebelum x-data dievaluasi. -->
+<script src="/static/app.js"></script>
+<script src="/static/alpine.min.js"></script>
+</body>
+</html>{{end}}

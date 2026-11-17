@@ -1,0 +1,232 @@
+{{define "files.html"}}<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tugas Saya — Tugas Submission</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body class="app-body" data-page="files"
+      x-data="{ s: $app }"
+      x-init="s.init()"
+      @keydown.escape.window="s.closeDialogs()"
+      data-user='{{ .User | jsonify }}'
+      data-csrf="{{ .CSRF }}"
+      data-max-upload="{{ .MaxUpload }}"
+      data-repo-ready="{{ if .RepoReady }}1{{ else }}0{{ end }}">
+<header class="topbar">
+  <div class="topbar-left">
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path fill="#1a73e8" d="M9.4 3.3 3.3 13.2h4.2L9 18.7l6.1-9.9h-4.2z"/>
+      <path fill="#34a853" d="M14.6 3.3 8.5 13.2h4.2l-1.5 5.5 6.1-9.9h-4.2z"/>
+    </svg>
+    <span class="brand-text">Tugas Submission</span>
+  </div>
+
+  <div class="search-wrap">
+    <input type="search" class="search" placeholder="Cari berkas"
+           x-model="s.query" @input.debounce.250ms="s.applyFilter()" aria-label="Cari berkas">
+  </div>
+
+  <div class="topbar-right">
+    <span class="user-chip" x-text="s.user.display_name || s.user.username"></span>
+    <a class="btn ghost" href="/admin" x-show="s.user.role === 'admin'">Admin</a>
+    <form method="post" action="/logout" class="inline-form">
+      <button class="btn ghost" type="submit">Keluar</button>
+    </form>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <button class="btn primary block" @click="s.openUpload()">
+      <span aria-hidden="true">+</span> Unggah
+    </button>
+
+    <nav class="side-nav" aria-label="Navigasi folder">
+      <button class="side-item" :class="{active: s.path === ''}" @click="s.navigate('')">
+        <span class="side-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></svg>
+        </span> Semua Tugas
+      </button>
+      <template x-for="b in s.breadcrumbs" :key="b.path">
+        <button class="side-item" :class="{active: b.path === s.path}" @click="s.navigate(b.path)">
+          <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></svg>
+          </span> <span x-text="b.name"></span>
+        </button>
+      </template>
+    </nav>
+
+    <div class="side-section">
+      <h2 class="side-title">Status Sinkronisasi</h2>
+      <dl class="status-list">
+        <dt>Menunggu push</dt><dd x-text="s.status.pending + ' berkas'"></dd>
+        <dt>Push berikutnya</dt><dd x-text="s.nextPushLabel()"></dd>
+        <dt>Terpakai</dt><dd x-text="s.usedLabel()"></dd>
+      </dl>
+      <p class="muted small" x-show="!s.repoReady">
+        Repo GitHub belum dikonfigurasi. Berkas tetap tersimpan di server.
+      </p>
+      <p class="alert small" x-show="s.status.last_error" x-text="s.status.last_error"></p>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="toolbar">
+      <nav class="breadcrumbs" aria-label="Lokasi">
+        <button class="crumb" @click="s.navigate('')">Tugas Saya</button>
+        <template x-for="b in s.breadcrumbs" :key="'c'+b.path">
+          <span class="crumb-sep" aria-hidden="true">›</span>
+          <button class="crumb" @click="s.navigate(b.path)" x-text="b.name"></button>
+        </template>
+      </nav>
+      <div class="toolbar-right">
+        <button class="btn ghost" @click="s.toggleView()" x-text="s.view === 'list' ? 'Kisi' : 'Daftar'"></button>
+        <button class="btn ghost" @click="s.load()" title="Muat ulang" aria-label="Muat ulang">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7 M20 4v5h-5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="upload-zone" x-show="s.dragging" x-transition
+         @dragover.prevent="s.dragging = true" @dragleave.prevent="s.dragging = false"
+         @drop.prevent="s.onDrop($event)">
+      Lepas berkas di sini untuk mengunggah
+    </div>
+
+    <div class="status-line" x-show="s.loading">Memuat…</div>
+    <div class="status-line error" x-show="s.error" x-text="s.error" role="alert"></div>
+
+    <div class="empty-state" x-show="!s.loading && s.filtered.length === 0">
+      <div class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></svg>
+      </div>
+      <h2>Belum ada berkas</h2>
+      <p class="muted">Unggah tugas pertama Anda. Berkas otomatis masuk ke
+        <code>tugas/{{ .User.Username }}/</code> di repository.</p>
+      <button class="btn primary" @click="s.openUpload()">Unggah berkas</button>
+    </div>
+
+    <ul class="file-list" x-show="!s.loading && s.filtered.length > 0 && s.view === 'list'">
+      <template x-for="f in s.filtered" :key="f.path">
+        <li class="file-row" :class="{selected: s.selection.includes(f.path)}">
+          <label class="row-check">
+            <input type="checkbox" :value="f.path" x-model="s.selection" :aria-label="'Pilih ' + f.name">
+          </label>
+          <button class="file-name" @click="s.openItem(f)">
+            <span class="file-icon" :class="f.is_dir ? 'dir' : 'file'" aria-hidden="true">
+              <img :src="s.iconFor(f.name, f.is_dir)" alt="" width="18" height="18">
+            </span>
+            <span x-text="f.name"></span>
+          </button>
+          <span class="file-size muted" x-text="f.is_dir ? '—' : s.sizeLabel(f.size)"></span>
+          <span class="file-status" :class="f.status" x-text="f.status === 'pending' ? 'Menunggu' : 'Tersinkron'"></span>
+          <span class="file-date muted" x-text="f.updated"></span>
+          <span class="row-actions">
+            <button class="icon-btn" @click="s.startRename(f)" :disabled="f.is_dir" title="Ganti nama" aria-label="Ganti nama">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z M14 6l4 4"/></svg>
+            </button>
+            <a class="icon-btn" :href="s.downloadUrl(f.path)"
+               x-show="!f.is_dir" title="Unduh" aria-label="Unduh">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11 M7 11l5 5 5-5 M5 20h14"/></svg>
+            </a>
+            <button class="icon-btn danger" @click="s.askDelete(f)" :disabled="f.is_dir" title="Hapus" aria-label="Hapus">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M9 7V5h6v2 M6 7l1 13h10l1-13"/></svg>
+            </button>
+          </span>
+        </li>
+      </template>
+    </ul>
+
+    <div class="file-grid" x-show="!s.loading && s.filtered.length > 0 && s.view === 'grid'">
+      <template x-for="f in s.filtered" :key="'g'+f.path">
+        <div class="grid-card" :class="{selected: s.selection.includes(f.path)}">
+          <button class="grid-icon" @click="s.openItem(f)" :aria-label="f.name">
+            <img :src="s.iconFor(f.name, f.is_dir)" alt="" width="40" height="40">
+          </button>
+          <p class="grid-name" x-text="f.name"></p>
+          <p class="muted small" x-text="f.is_dir ? 'Folder' : s.sizeLabel(f.size)"></p>
+          <div class="grid-actions">
+            <button class="icon-btn" @click="s.startRename(f)" :disabled="f.is_dir" aria-label="Ganti nama">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z M14 6l4 4"/></svg>
+            </button>
+            <button class="icon-btn danger" @click="s.askDelete(f)" :disabled="f.is_dir" aria-label="Hapus">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16 M9 7V5h6v2 M6 7l1 13h10l1-13"/></svg>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </main>
+</div>
+
+<!-- Dialog unggah -->
+<div class="modal-backdrop" x-show="s.uploadOpen" x-transition.opacity @click.self="s.uploadOpen = false">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+    <h2 id="upload-title">Unggah berkas</h2>
+    <p class="muted small" x-text="'Maksimal ' + s.maxUploadMB + ' MB per berkas'"></p>
+
+    <div class="dropzone" @dragover.prevent @drop.prevent="s.onDrop($event)">
+      <p>Seret berkas ke sini atau</p>
+      <label class="btn ghost">
+        Pilih berkas
+        <input type="file" multiple class="visually-hidden" @change="s.onPick($event)">
+      </label>
+    </div>
+
+    <ul class="pick-list" x-show="s.picks.length">
+      <template x-for="p in s.picks" :key="p.name">
+        <li><span x-text="p.name"></span><span class="muted small" x-text="s.sizeLabel(p.size)"></span></li>
+      </template>
+    </ul>
+
+    <div class="progress" x-show="s.uploading">
+      <div class="progress-bar"><span :style="'width:' + progress + '%'"></span></div>
+      <p class="muted small" x-text="s.progressLabel"></p>
+    </div>
+
+    <p class="alert small" x-show="s.uploadError" x-text="s.uploadError" role="alert"></p>
+
+    <div class="modal-actions">
+      <button class="btn ghost" @click="s.uploadOpen = false" :disabled="s.uploading">Batal</button>
+      <button class="btn primary" @click="s.doUpload()" :disabled="s.uploading || s.picks.length === 0">Unggah</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dialog ganti nama -->
+<div class="modal-backdrop" x-show="s.renameOpen" x-transition.opacity @click.self="s.renameOpen = false">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Ganti nama</h2>
+    <label class="field-label" for="rename-input">Nama baru</label>
+    <input id="rename-input" type="text" x-model="s.renameValue" @keydown.enter="s.doRename()">
+    <p class="alert small" x-show="s.renameError" x-text="s.renameError" role="alert"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" @click="s.renameOpen = false">Batal</button>
+      <button class="btn primary" @click="s.doRename()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dialog hapus -->
+<div class="modal-backdrop" x-show="s.deleteOpen" x-transition.opacity @click.self="s.deleteOpen = false">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Hapus berkas</h2>
+    <p x-text="s.deleteTarget ? 'Hapus “' + s.deleteTarget.name + '” dari repository?' : ''"></p>
+    <p class="muted small">Berkas dihapus dari repository pada sinkronisasi berikutnya.</p>
+    <p class="alert small" x-show="s.deleteError" x-text="s.deleteError" role="alert"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" @click="s.deleteOpen = false">Batal</button>
+      <button class="btn danger-btn" @click="s.doDelete()">Hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- app.js dimuat lebih dulu: state didaftarkan sebagai magic $app
+     pada event "alpine:init", sebelum x-data dievaluasi. -->
+<script src="/static/app.js"></script>
+<script src="/static/alpine.min.js"></script>
+</body>
+</html>{{end}}

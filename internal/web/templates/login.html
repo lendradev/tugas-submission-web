@@ -1,0 +1,40 @@
+{{define "login.html"}}<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk — Tugas Submission</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body class="login-body">
+<main class="login-card">
+  <div class="login-brand">
+    <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+      <path fill="#1a73e8" d="M9.4 3.3 3.3 13.2h4.2L9 18.7l6.1-9.9h-4.2z"/>
+      <path fill="#34a853" d="M14.6 3.3 8.5 13.2h4.2l-1.5 5.5 6.1-9.9h-4.2z"/>
+    </svg>
+    <div>
+      <h1>Tugas Submission</h1>
+      <p class="muted">Kumpulkan tugas ke repository, tanpa Git CLI.</p>
+    </div>
+  </div>
+
+  {{if .Error}}<p class="alert" role="alert">{{.Error}}</p>{{end}}
+
+  <form method="post" action="/login" autocomplete="on">
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" required autofocus
+           autocomplete="username" autocapitalize="none" spellcheck="false">
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required
+           autocomplete="current-password">
+
+    <button class="btn primary block" type="submit">Masuk</button>
+  </form>
+
+  <p class="muted small">Akun dibuat oleh admin. Hubungi admin bila belum punya akun.</p>
+</main>
+</body>
+</html>{{end}}
